@@ -1199,7 +1199,7 @@ export class OpenSeaPort {
     accountAddress: string;
     recipientAddress?: string;
     referrerAddress?: string;
-  }): Promise<{ wyvern_args: WyvernAtomicMatchParameters; txnData: any }> {
+  }): Promise<string> {
     const matchingOrder = this._makeMatchingOrder({
       order,
       accountAddress,
@@ -1209,28 +1209,23 @@ export class OpenSeaPort {
     const { buy, sell } = assignOrdersToSides(order, matchingOrder);
 
     const metadata = this._getMetadata(order, referrerAddress);
-
-    //const transactionHash = await this._atomicMatch({
-    const txnObj = await this._atomicMatch({
+    const transactionHash = await this._atomicMatch({
       buy,
       sell,
       accountAddress,
       metadata,
     });
 
-    //await this._confirmTransaction(
-    //  transactionHash,
-    //  EventType.MatchOrders,
-    //  "Fulfilling order",
-    //  async () => {
-    //    const isOpen = await this._validateOrder(order);
-    //    return !isOpen;
-    //  }
-    //);
-
-    // donn: was a string, now my txnObj.
-    //return transactionHash;
-    return txnObj;
+    await this._confirmTransaction(
+      transactionHash,
+      EventType.MatchOrders,
+      "Fulfilling order",
+      async () => {
+        const isOpen = await this._validateOrder(order);
+        return !isOpen;
+      }
+    );
+    return transactionHash;
   }
 
   /**
@@ -4109,7 +4104,7 @@ export class OpenSeaPort {
     let shouldValidateBuy = true;
     let shouldValidateSell = true;
     // Only check buy, but shouldn't matter as they should always be equal
-    //const wyvernProtocol = this._getWyvernProtocolForOrder(buy);
+    const wyvernProtocol = this._getWyvernProtocolForOrder(buy);
     const wyvernProtocolReadOnly = this._getWyvernProtocolForOrder(buy, true);
 
     if (sell.maker.toLowerCase() == accountAddress.toLowerCase()) {
@@ -4151,7 +4146,7 @@ export class OpenSeaPort {
       matchMetadata: metadata,
     });
 
-    ////////////////let txHash;
+    let txHash;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const txnData: any = { from: accountAddress, value };
     const args: WyvernAtomicMatchParameters = [
@@ -4249,45 +4244,43 @@ export class OpenSeaPort {
     }
 
     // Then do the transaction
-    //try {
-    //  this.logger(`Fulfilling order with gas set to ${txnData.gas}`);
-    //  txHash =
-    //    await wyvernProtocol.wyvernExchange.atomicMatch_.sendTransactionAsync(
-    //      args[0],
-    //      args[1],
-    //      args[2],
-    //      args[3],
-    //      args[4],
-    //      args[5],
-    //      args[6],
-    //      args[7],
-    //      args[8],
-    //      args[9],
-    //      args[10],
-    //      txnData
-    //    );
-    //} catch (error) {
-    //  console.error(error);
+    try {
+      this.logger(`Fulfilling order with gas set to ${txnData.gas}`);
+      txHash =
+        await wyvernProtocol.wyvernExchange.atomicMatch_.sendTransactionAsync(
+          args[0],
+          args[1],
+          args[2],
+          args[3],
+          args[4],
+          args[5],
+          args[6],
+          args[7],
+          args[8],
+          args[9],
+          args[10],
+          txnData
+        );
+    } catch (error) {
+      console.error(error);
 
-    //  this._dispatch(EventType.TransactionDenied, {
-    //    error,
-    //    buy,
-    //    sell,
-    //    accountAddress,
-    //    matchMetadata: metadata,
-    //  });
+      this._dispatch(EventType.TransactionDenied, {
+        error,
+        buy,
+        sell,
+        accountAddress,
+        matchMetadata: metadata,
+      });
 
-    //  throw new Error(
-    //    `Failed to authorize transaction: "${
-    //      error instanceof Error && error.message
-    //        ? error.message
-    //        : "user denied"
-    //    }..."`
-    //  );
-    //}
-    //return txHash;
-    // donn:
-    return { wyvern_args: args, txnData };
+      throw new Error(
+        `Failed to authorize transaction: "${
+          error instanceof Error && error.message
+            ? error.message
+            : "user denied"
+        }..."`
+      );
+    }
+    return txHash;
   }
 
   private async _getRequiredAmountForTakingSellOrder(sell: Order) {
