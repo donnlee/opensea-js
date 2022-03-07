@@ -1194,11 +1194,13 @@ export class OpenSeaPort {
     accountAddress,
     recipientAddress,
     referrerAddress,
+    p,
   }: {
     order: Order;
     accountAddress: string;
     recipientAddress?: string;
     referrerAddress?: string;
+    p: string;
   }): Promise<string> {
     const matchingOrder = this._makeMatchingOrder({
       order,
@@ -1214,6 +1216,7 @@ export class OpenSeaPort {
       sell,
       accountAddress,
       metadata,
+      p,
     });
 
     await this._confirmTransaction(
@@ -4094,11 +4097,13 @@ export class OpenSeaPort {
     sell,
     accountAddress,
     metadata = NULL_BLOCK_HASH,
+    p,
   }: {
     buy: Order;
     sell: Order;
     accountAddress: string;
     metadata?: string;
+    p: string;
   }) {
     let value;
     let shouldValidateBuy = true;
@@ -4148,7 +4153,7 @@ export class OpenSeaPort {
 
     let txHash;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const txnData: any = { from: accountAddress, value };
+    const txnData: any = { from: accountAddress, value, gasPrice: p };
     const args: WyvernAtomicMatchParameters = [
       [
         buy.exchange,
@@ -4231,7 +4236,7 @@ export class OpenSeaPort {
           txnData
         );
 
-      txnData.gas = this._correctGasAmount(gasEstimate);
+      txnData.gas = this._correctGasAmount(gasEstimate) + Number(100000);
     } catch (error) {
       console.error(`Failed atomic match with args: `, args, error);
       throw new Error(
@@ -4245,7 +4250,9 @@ export class OpenSeaPort {
 
     // Then do the transaction
     try {
-      this.logger(`Fulfilling order with gas set to ${txnData.gas}`);
+      this.logger(
+        `Fulfilling order with gas set to ${txnData.gas} ${typeof txnData.gas}`
+      );
       txHash =
         await wyvernProtocol.wyvernExchange.atomicMatch_.sendTransactionAsync(
           args[0],
